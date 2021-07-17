@@ -32,6 +32,8 @@ add_test("test_apply_replace_patterns")
 add_test("test_replace_fails_if_too_long")
 add_test("test_replace_with_fewer_tokens")
 add_test("test_replace_with_more_tokens")
+add_test("test_unreplace")
+add_test("test_update_replacement")
 add_test("test_comment_if")
 add_test("test_comment_if_not")
 add_test("test_uncomment_if")
@@ -398,6 +400,38 @@ Sub test_replace_with_more_tokens()
   expect_tk(5, TK_IDENTIFIER, "wom")
 End Sub
 
+Sub test_unreplace()
+  lx.parse_basic("'!replace foo bar") : tr.transpile()
+  lx.parse_basic("'!replace wom bat") : tr.transpile()
+  lx.parse_basic("'!replace bill ben") : tr.transpile()
+  expect_replacement(0, "foo", "bar")
+  expect_replacement(1, "wom", "bat")
+  expect_replacement(2, "bill", "ben")
+  expect_replacement(3, "", "")
+
+  lx.parse_basic("foo wom bill") : tr.transpile()
+  expect_tokens(3)
+  expect_tk(0, TK_IDENTIFIER, "bar")
+  expect_tk(1, TK_IDENTIFIER, "bat")
+  expect_tk(2, TK_IDENTIFIER, "ben")
+
+  lx.parse_basic("'!unreplace wom") : tr.transpile()
+  assert_string_equals("", sys.err$)
+  expect_replacement(0, "foo", "bar")
+  expect_replacement(1, Chr$(0), Chr$(0))
+  expect_replacement(2, "bill", "ben")
+  expect_replacement(3, "", "")
+
+  lx.parse_basic("foo wom bill") : tr.transpile()
+  expect_tokens(3)
+  expect_tk(0, TK_IDENTIFIER, "bar")
+  expect_tk(1, TK_IDENTIFIER, "wom")
+  expect_tk(2, TK_IDENTIFIER, "ben")
+End Sub
+
+Sub test_update_replacement()
+End Sub
+
 Sub test_comment_if()
   ' 'foo' is set, code inside !comment_if block should be commented.
   lx.parse_basic("'!set foo") : tr.transpile()
@@ -481,8 +515,8 @@ Sub test_uncomment_if_not()
 End Sub
 
 Sub expect_replacement(i%, from$, to_$)
-  assert_string_equals(from$, tr.replacements$(i%, 0))
-  assert_string_equals(to_$, tr.replacements$(i%, 1))
+  assert_true(from$ = tr.replacements$(i%, 0), "Assert failed, expected from$ = '" + from$ + "', but was '" + tr.replacements$(i%, 0) + "'")
+  assert_true(to_$  = tr.replacements$(i%, 1), "Assert failed, expected to_$ = '"   + to_$  + "', but was '" + tr.replacements$(i%, 1) + "'")
 End Sub
 
 Sub expect_tokens(num)

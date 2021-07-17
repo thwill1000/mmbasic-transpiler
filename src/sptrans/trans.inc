@@ -25,8 +25,9 @@ Dim tr.flags$(set.new%(10))
 set.init(tr.flags$())
 
 ' The list of replacements (from -> to).
+Const tr.MAX_REPLACEMENTS% = 200
 Dim tr.num_replacements
-Dim tr.replacements$(199, 1) Length 80
+Dim tr.replacements$(tr.MAX_REPLACEMENTS% - 1, 1) Length 80
 
 ' Set to name of file after processing #Include
 Dim tr.include$
@@ -50,18 +51,19 @@ Sub tr.transpile()
 
   If lx.type(0) <> TK_DIRECTIVE Then Exit Sub
 
-  Local t$ = lx.directive$(0)
-  If     t$ = "!clear"        Then : tr.process_clear()
-  ElseIf t$ = "!comments"     Then : tr.process_comments()
-  ElseIf t$ = "!comment_if"   Then : tr.process_if()
-  ElseIf t$ = "!empty-lines"  Then : tr.process_empty_lines()
-  ElseIf t$ = "!indent"       Then : tr.process_indent()
-  ElseIf t$ = "!uncomment_if" Then : tr.process_if()
-  ElseIf t$ = "!replace"      Then : tr.process_replace()
-  ElseIf t$ = "!set"          Then : tr.process_set()
-  ElseIf t$ = "!spacing"      Then : tr.process_spacing()
-  Else : sys.err$ = "unknown " + Mid$(t$, 2) + " directive"
-  EndIf
+  Select Case lx.directive$(0)
+    Case "!clear"        : tr.process_clear()
+    Case "!comments"     : tr.process_comments()
+    Case "!comment_if"   : tr.process_if()
+    Case "!empty-lines"  : tr.process_empty_lines()
+    Case "!indent"       : tr.process_indent()
+    Case "!replace"      : tr.process_replace()
+    Case "!set"          : tr.process_set()
+    Case "!spacing"      : tr.process_spacing()
+    Case "!uncomment_if" : tr.process_if()
+    Case "!unreplace"    : tr.process_replace() ' Same SUB for replace & unreplace.
+    Case Else            : sys.err$ = "unknown !" + Mid$(t$, 2) + " directive"
+  End Select
 
   If sys.err$ <> "" Then Exit Sub
 
@@ -110,6 +112,10 @@ Sub tr.apply_replacements()
 
   Local capture$, i%, j%, k%, old_num%, s$, to_$
   For i% = 0 To tr.num_replacements% - 1
+
+    ' Skip 'dead' entires.
+    If tr.replacements$(i%, 0) = Chr$(0) Then Continue For
+
     j% = 0
     ' Need to use a DO rather than a FOR because the latter does not re-evaluate its end-point
     ' at the beginning of each iteration.
@@ -337,11 +343,12 @@ Sub tr.process_replace()
     ElseIf gidx% < 1 Then
       sys.err$ = "expects <from> argument"
     Else
+      If lx.directive$(0) = "!unreplace" Then groups$(1) = Chr$(0)
       tr.add_replacement(groups$(0), groups$(1))
     EndIf
   EndIf
 
-  If sys.err$ <> "" Then sys.err$ = "!replace directive " + sys.err$
+  If sys.err$ <> "" Then sys.err$ = lx.directive$(0) + " directive " + sys.err$
 End Sub
 
 Sub tr.process_set()
@@ -372,7 +379,24 @@ Sub tr.clear_replacements()
 End Sub
 
 Sub tr.add_replacement(from$, to_$)
-  tr.replacements$(tr.num_replacements%, 0) = LCase$(from$)
-  tr.replacements$(tr.num_replacements%, 1) = to_$
-  Inc tr.num_replacements%
+  Local f_lower$ = LCase$(from$)
+  Local i%
+  For i% = 0 To tr.MAX_REPLACEMENTS% - 1
+    If f_lower$ = tr.replacements$(i%, 0) Then
+      ' Mark existing entry dead.
+      tr.replacements$(i%, 0) = Chr$(0)
+      tr.replacements$(i%, 1) = Chr$(0)
+      If to_$ = Chr$(0) Then Exit Sub
+    EndIf
+    If tr.replacements$(i%, 0) = "" Then Exit For
+  Next
+
+  If i% < tr.MAX_REPLACEMENTS% Then
+    tr.replacements$(i%, 0) = f_lower$
+    tr.replacements$(i%, 1) = to_$
+    If i% = tr.num_replacements% Then Inc tr.num_replacements%
+  Else
+    ' TODO: add a unit test for this.
+    sys.err$ = "too many replacements (max " + Str$(tr.MAX_REPLACEMENTS%) + ")"
+  EndIf
 End Sub
